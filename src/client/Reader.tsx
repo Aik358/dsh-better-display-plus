@@ -21,7 +21,7 @@ import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
 import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
-import { frostedGlassOf } from './fold-intensity.js';
+import { foldIntensityOf, frostedGlassOf, keepProseOf, type FoldIntensity } from './fold-intensity.js';
 import { ChoreographedFlow, useFlowChat } from './ChoreographedFlow.js';
 import { ClosedProcessSummary } from './ClosedProcessSummary.js';
 import { StickyLane } from './StickyLane.js';
@@ -470,7 +470,7 @@ function DeliverablesRow({ deliverables, openFile, revealFile, openMode }: {
   );
 }
 
-const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; autoFold: boolean; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
+const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, foldLevel, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; autoFold: boolean; keepProse: boolean; foldLevel: FoldIntensity; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
   const snapshot = props.useChat(snapshot => snapshot);
   const nodes = snapshot.nodes;
   const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
@@ -488,7 +488,10 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   const mainKeys = startsWithUser ? group.keys.slice(1) : group.keys;
   const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key)), [nodes, group, mainKeys, turn]);
   const steps = useMemo(() => segmentLiveTurn(flow, key => nodes.get(key)), [flow, nodes]);
-  const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold), [steps, boundary, autoFold]);
+  // Level 2 ("summary") means "fold the process, never the prose"; the separate
+  // switch extends that same guarantee to levels 0 and 1.
+  const keepBody = keepProse || foldLevel === 2;
+  const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold, keepBody), [steps, boundary, autoFold, keepBody]);
   const openMode = deliverableOpenModeOf(useSyncExternalStore(
     props.openPrefs?.subscribe ?? ((fn: () => void) => { void fn; return () => {}; }),
     () => props.openPrefs?.getSnapshot()?.deliverableOpenMode,
@@ -623,6 +626,10 @@ export function Reader(props: ReaderProps) {
   const storeAutoFold = props.useStore(state => state.autoFold);
   const autoFold = prefsSnap?.autoFold ?? (prefsSnap?.foldIntensity !== undefined ? prefsSnap.foldIntensity !== 0 : undefined) ?? storeAutoFold ?? true;
   const frostedGlass = frostedGlassOf(prefsSnap);
+  // Orthogonal to autoFold: the slider decides how much process to fold, this
+  // decides whether the model's user-facing text is foldable at all.
+  const keepProse = keepProseOf(prefsSnap);
+  const foldLevel = foldIntensityOf(prefsSnap);
   const streamMotion = useMemo(() => ({ enabled: motion, activatedAt: activatedAt.current }), [motion]);
   const groups = useMemo(() => groupNodes(order, key => nodes.get(key)), [order, nodes, timeline]);
   const isAwaitingModel = useMemo(() => {
@@ -812,7 +819,7 @@ export function Reader(props: ReaderProps) {
       {historyError && <div className={css.notice}>历史记录加载失败，可再次尝试；现有内容未改变。</div>}
       {openError && <div className={css.error} role="alert">会话暂时无法读取：{openError.message}</div>}
       {loading && groups.length === 0 && <p className={css.empty} role="status">正在读取会话…</p>}
-      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
+      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} keepProse={keepProse} foldLevel={foldLevel} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
       {visibleSubmissions.map(submission => {
         const images = pendingSubmissionImages(submission);
         return (

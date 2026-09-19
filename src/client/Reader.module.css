@@ -125,9 +125,13 @@
 .diffRemoved { color: var(--dsw-alias-state-error-primary, #d1483c); }
 /* A digest row is [label][counts]; the counts are pushed to the right edge so
    every row's numbers line up in one column instead of drifting with the label. */
-.summaryRow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.summaryRow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; flex-wrap: nowrap; }
 .summaryRow > .diffStatRoot { flex: none; margin-left: auto; }
-.summaryRow > :first-child { min-width: 0; }
+/* Every direct child must be allowed to shrink, not just the first. A digest is
+   one line by design, so the row has to ellipsise rather than wrap; leaving a
+   later child at its intrinsic width pushed the counts off the row and broke
+   the label mid-phrase. */
+.summaryRow > * { min-width: 0; }
 .diffStatRoot { position: relative; flex: none; }
 /* Transparent at rest like the path and count chips beside it; the outline and
    surface appear on hover or keyboard focus, so the row reads as text until the
@@ -472,8 +476,11 @@
 .priorFoldDrawer { display: flex; flex-direction: column; gap: 14px; min-width: 0; width: 100%; }
 .jump { margin-top: -34px; flex: none; width: 34px; height: 34px; display: flex; justify-content: center; align-items: center; padding: 0; border: 0; border-radius: 100px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-button-floating-fill, var(--dsw-alias-bg-base)); box-shadow: var(--dsw-elevation-panel, 0 2px 8px var(--dsw-alias-border-l1)); pointer-events: auto; }
 .jump:hover { background: var(--dsw-alias-button-floating-hover, var(--dsw-alias-interactive-bg-hover)); }
-.foldSummary { display: inline-flex; align-items: baseline; white-space: nowrap !important; max-width: 100%; }
-.foldSummaryPart { display: inline-flex; align-items: baseline; white-space: nowrap !important; }
+/* The digest is a single line. nowrap on the parent does not stop the parts
+   from wrapping, so each part is pinned too and the run clips with an ellipsis
+   when the column is narrow. */
+.foldSummary { display: inline-flex; align-items: baseline; white-space: nowrap !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.foldSummaryPart { display: inline-flex; align-items: baseline; white-space: nowrap !important; flex: none; }
 .numberRollRoot { display: inline-flex; position: relative; overflow: hidden; vertical-align: baseline; line-height: inherit; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap !important; flex-shrink: 0; min-width: 1.45em; justify-content: center; text-align: center; }
 .numberRollSizer { visibility: hidden; user-select: none; pointer-events: none; line-height: inherit; white-space: nowrap; }
 .numberRollDigit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; line-height: inherit; white-space: nowrap; }
