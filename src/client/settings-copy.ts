@@ -11,6 +11,8 @@ export type SettingsCopyKey =
   | 'foldSummary'
   | 'keepProseTitle'
   | 'keepProseDescription'
+  | 'keepToolSemanticsTitle'
+  | 'keepToolSemanticsDescription'
   | 'skillTitle'
   | 'skillInstalled'
   | 'skillMissing'
@@ -34,6 +36,8 @@ export const en: SettingsCopy = {
   foldNone: 'Off',
   foldStandard: 'On',
   foldSummary: 'Summary',
+  keepToolSemanticsTitle: 'Name the tools inside a fold',
+  keepToolSemanticsDescription: 'Off by default. A folded run lists the tools it actually ran and what each acted on — the same identity the tool card shows — instead of only a count. Independent of the switches above.',
   keepProseTitle: 'Keep model replies visible when folding',
   keepProseDescription: 'Off by default. When on, a fold collects only process steps — tool calls, their output and thinking — while the text the model writes to you always stays open. A run of a single step is left expanded, so a lone tool row keeps its name and target. Independent of the fold control above; works at every fold level.',
   skillTitle: 'generative-mcpapps skill',
@@ -58,6 +62,8 @@ export const zh: SettingsCopy = {
   foldNone: '关闭',
   foldStandard: '开启',
   foldSummary: '摘要',
+  keepToolSemanticsTitle: '摘要中写明工具语义',
+  keepToolSemanticsDescription: '默认关闭。折叠的一段会列出它实际调用过的工具与作用对象——与工具卡片用的是同一套标识——而不只是一个数量。与上方开关相互独立。',
   keepProseTitle: '折叠时保留模型回复',
   keepProseDescription: '默认关闭。开启后，折叠只收纳过程步骤——工具调用、其输出与思维链——而模型写给读者的正文始终展开。只有一步的过程不会被折成摘要，单独一行工具仍保留名称与目标。与上方的折叠档位相互独立，各档位均可生效。',
   skillTitle: 'generative-mcpapps 技能',

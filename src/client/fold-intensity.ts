@@ -12,6 +12,11 @@ export function foldIntensityOf(state: unknown): FoldIntensity {
   return FOLD_INTENSITY_DEFAULT;
 }
 
+/** Name the tools a fold contains instead of only counting them. Default off. */
+export function keepToolSemanticsOf(state: unknown): boolean {
+  return (state as { keepToolSemantics?: unknown } | null)?.keepToolSemantics === true;
+}
+
 export function frostedGlassOf(state: unknown): boolean {
   if (state && typeof state === 'object' && 'frostedGlass' in state) {
     return (state as { frostedGlass?: unknown }).frostedGlass === true;

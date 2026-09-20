@@ -8,6 +8,8 @@ export interface ReaderPrefsSnapshot {
     foldIntensity?: FoldIntensity;
     autoFold?: boolean;
     processOnly?: boolean;
+    keepProse?: boolean;
+    keepToolSemantics?: boolean;
 }
 export interface OpenPrefs {
     getSnapshot: () => ReaderPrefsSnapshot;
@@ -16,6 +18,8 @@ export interface OpenPrefs {
         setDeliverableOpenMode: (value: DeliverableOpenMode) => void;
         setFrostedGlass: (value: boolean) => void;
         setFoldIntensity?: (value: FoldIntensity) => void;
+        setKeepProse?: (value: boolean) => void;
+        setKeepToolSemantics?: (value: boolean) => void;
         setAutoFold?: (value: boolean) => void;
     };
 }

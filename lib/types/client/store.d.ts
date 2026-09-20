@@ -15,8 +15,18 @@ export interface ReaderState {
     foldIntensity: FoldIntensity;
     /** Translucent frosted chrome. Default off so opaque main chrome stays. */
     frostedGlass: boolean;
+    /**
+     * Keep the model's user-facing answer text out of the fold. Orthogonal to
+     * foldIntensity, which only decides how much process to fold. Default off.
+     */
+    keepProse: boolean;
     /** Derived from foldIntensity === 2; kept for older #14 snapshots. */
     processOnly: boolean;
+    /**
+     * Name the tools a fold contains instead of only counting them. Opt-in:
+     * `工具×22` says how much was hidden, this says what it was. Default off.
+     */
+    keepToolSemantics: boolean;
 }
 type ReaderActions = {
     setExpanded: (draft: ReaderState, key: string, value: boolean) => void;
@@ -25,6 +35,8 @@ type ReaderActions = {
     setDeliverableOpenMode: (draft: ReaderState, value: DeliverableOpenMode) => void;
     setFoldIntensity: (draft: ReaderState, value: FoldIntensity) => void;
     setFrostedGlass: (draft: ReaderState, value: boolean) => void;
+    setKeepProse: (draft: ReaderState, value: boolean) => void;
+    setKeepToolSemantics: (draft: ReaderState, value: boolean) => void;
 };
 export declare function createReaderStore(): EngineStoreHandle<ReaderState, ReaderActions>;
 export {};

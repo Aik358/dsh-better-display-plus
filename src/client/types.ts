@@ -42,6 +42,8 @@ export interface ReaderInjected {
       processOnly?: boolean;
       /** Keep user-facing answer text out of the fold; orthogonal to foldIntensity. */
       keepProse?: boolean;
+      /** Name the tools a fold contains instead of only counting them. */
+      keepToolSemantics?: boolean;
     };
     subscribe: (fn: () => void) => () => void;
     actions?: {
@@ -49,6 +51,7 @@ export interface ReaderInjected {
       setAutoFold?: (value: boolean) => void;
       setFrostedGlass?: (value: boolean) => void;
       setKeepProse?: (value: boolean) => void;
+      setKeepToolSemantics?: (value: boolean) => void;
       setDeliverableOpenMode?: (value: import('./open-file.js').DeliverableOpenMode) => void;
     };
   };

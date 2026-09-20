@@ -14,6 +14,23 @@ export interface TurnBoundary {
 export declare function groupNodes(order: readonly string[], get: (key: string) => ChatConversationViewNode | undefined): ReaderGroup[];
 export declare function boundaryOf(turn: TurnLocation | undefined): TurnBoundary;
 export declare function isEarlierNarration(data: AssistantChatData, boundary: TurnBoundary): boolean;
+/**
+ * Whether the turn's process lane is open.
+ *
+ * A turn that ended in anything other than a clean completion defaults to open:
+ * an error, an interrupt, an approval block or an unknown terminal must not
+ * fold the transcript away, because that is exactly when a reader needs to see
+ * what happened. Only a completed turn collapses by default.
+ */
+/**
+ * Whether the reader explicitly asked for the whole process lane to open.
+ *
+ * Distinct from `processExpanded`, which also covers the *default* for a
+ * running turn. The flow treats this as "open every fold", so a default would
+ * unfold every digest the moment a turn starts; only a deliberate toggle may.
+ * Left undefined, every fold stays closed and rows open one at a time.
+ */
+export declare function toggleProcessOpen(choice: boolean | undefined): boolean;
 export declare function processExpanded(choice: boolean | undefined, boundary: TurnBoundary): boolean;
 /** Reading while running must not pin the process open after completion. */
 export declare function processChoiceKey(groupKey: string, boundary: TurnBoundary): string;

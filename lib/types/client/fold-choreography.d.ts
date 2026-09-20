@@ -33,7 +33,7 @@ export type FlowRow = {
 };
 /** A step always has the same parent and React key, even when its membership changes. */
 export declare function flowRows(items: readonly LiveTurnItem[]): FlowRow[];
-export declare function retiringKeys(before: readonly LiveTurnItem[], after: readonly LiveTurnItem[], open: Readonly<Record<string, boolean>>): string[];
+export declare function retiringKeys(before: readonly LiveTurnItem[], after: readonly LiveTurnItem[], open: Readonly<Record<string, boolean>>, processOpen?: boolean): string[];
 /** Insert only new summary slots. Never admit incoming content during shrink. */
 export declare function collapseRows(before: readonly LiveTurnItem[], target: readonly LiveTurnItem[]): FlowRow[];
 export declare function containsNewUser(before: readonly LiveTurnItem[], after: readonly LiveTurnItem[]): boolean;

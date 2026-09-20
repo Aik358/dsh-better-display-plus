@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { foldIntensityOf, keepProseOf } from '../src/client/fold-intensity.js';
-import { presentLiveTurn, splitChainKeepingBody, type LiveStep } from '../src/client/live-turn.js';
+import { presentLiveTurn, settledFoldItems, splitChainKeepingBody, type LiveStep } from '../src/client/live-turn.js';
 
 /** Minimal step factories: only the fields the splitter reads. */
 const reasoning = (n: number): LiveStep => ({ kind: 'reasoning', key: `r${n}`, nodeKey: 'a', start: n, blocks: [], step: 0 });
@@ -33,6 +33,65 @@ test('keepProseOf defaults to off and reads only an explicit true', () => {
   assert.equal(keepProseOf({ keepProse: true }), true);
 });
 
+test('a think/tool/think/tool turn folds into one digest per thought', () => {
+  // The shape the reader expects: every stretch between two thoughts collapses
+  // into its own digest, and the user-facing answer is never folded. A turn
+  // like this has no body step until the very end, which is exactly why the
+  // splitter must flush on a *new reasoning* step and not only on a body.
+  const segments = splitChainKeepingBody([reasoning(0), tool(1), tool(2), reasoning(3), tool(4), body(5)]);
+  assert.deepEqual(segments.map(s => ({ fold: s.fold?.map(x => x.key) ?? null, open: s.open.map(x => x.key) })), [
+    { fold: ['r0', 't1', 't2'], open: [] },
+    { fold: ['r3', 't4'], open: [] },
+    { fold: null, open: ['b5'] },
+  ]);
+});
+
+test('a unit closes on the next thought, not on the first tool', () => {
+  // A unit runs from one thought up to the next one. A tool arriving in the
+  // trailing block does not close it: more tools — and then another thought —
+  // may still land inside the block the reader is watching.
+  const toolsOnly = [reasoning(0), tool(1), tool(2)];
+  assert.deepEqual(splitChainKeepingBody(toolsOnly).map(s => s.fold?.map(x => x.key) ?? null),
+    [null], 'tools alone do not close the open block');
+
+  const nextThought = [reasoning(0), tool(1), reasoning(2)];
+  assert.deepEqual(splitChainKeepingBody(nextThought).map(s => s.fold?.map(x => x.key) ?? null),
+    [['r0', 't1'], null], 'the next thought closes the block before it');
+});
+
+test('a finished turn segments when either opt-in switch is on', () => {
+  const steps = [reasoning(0), tool(1), reasoning(2), tool(3)];
+  const closed = { status: 'closed', reason: 'completed', latestStep: 9 } as never;
+  // Both switches off: the author's own summary owns the finished turn.
+  assert.equal(settledFoldItems(steps, closed, false, false), null);
+  // Either switch on: the per-run splitter takes over, sealed so the tail folds.
+  assert.ok(settledFoldItems(steps, closed, true, false), 'keepProse alone');
+  assert.ok(settledFoldItems(steps, closed, false, true), 'tool naming alone');
+});
+
+test('naming the tools also switches the turn to per-run digests', () => {
+  // The tool-named digest describes one run, so it only lines up with the
+  // content when the per-run splitter is in charge. Turning that switch on
+  // alone must not leave the author's single-run split in place.
+  const steps = [reasoning(0), tool(1), reasoning(2), tool(3)];
+  const named = presentLiveTurn(steps, openBoundary, true, false, true);
+  assert.deepEqual(named.filter(item => item.kind === 'fold').length, 1,
+    'the trailing block is still open, so only the closed unit folds');
+  const plain = presentLiveTurn(steps, openBoundary, true, false, false);
+  assert.deepEqual(plain.map(item => item.kind), named.map(item => item.kind),
+    'the digest shape does not depend on the switch');
+});
+
+test('a sealed turn folds its trailing unit, a live one keeps it open', () => {
+  const chain = [reasoning(0), tool(1), reasoning(2), tool(3)];
+  // Live: the last unit is the one still being written, so it stays readable.
+  assert.deepEqual(splitChainKeepingBody(chain).map(s => s.fold?.map(x => x.key) ?? null),
+    [['r0', 't1'], null]);
+  // Sealed: nothing is arriving any more, so the tail folds too.
+  assert.deepEqual(splitChainKeepingBody(chain, true).map(s => s.fold?.map(x => x.key) ?? null),
+    [['r0', 't1'], ['r2', 't3']]);
+});
+
 test('splitChainKeepingBody folds process runs and never a body step', () => {
   const segments = splitChainKeepingBody([reasoning(0), tool(1), body(2), reasoning(3), tool(4)]);
   assert.deepEqual(segments.map(s => ({ fold: s.fold?.map(x => x.key) ?? null, open: s.open.map(x => x.key) })), [
@@ -42,8 +101,8 @@ test('splitChainKeepingBody folds process runs and never a body step', () => {
   ]);
 });
 
-test('splitChainKeepingBody leaves the trailing run open', () => {
-  // The last run is still streaming, so it must stay readable as it arrives.
+test('splitChainKeepingBody leaves the trailing unit open', () => {
+  // The last unit is still streaming, so it must stay readable as it arrives.
   const segments = splitChainKeepingBody([body(0), reasoning(1), tool(2), tool(3)]);
   assert.deepEqual(segments.map(s => s.fold?.length ?? 0), [0, 0]);
   assert.deepEqual(segments[1]!.open.map(s => s.key), ['r1', 't2', 't3']);

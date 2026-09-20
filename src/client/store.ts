@@ -30,6 +30,11 @@ export interface ReaderState {
   keepProse: boolean;
   /** Derived from foldIntensity === 2; kept for older #14 snapshots. */
   processOnly: boolean;
+  /**
+   * Name the tools a fold contains instead of only counting them. Opt-in:
+   * `工具×22` says how much was hidden, this says what it was. Default off.
+   */
+  keepToolSemantics: boolean;
 }
 type ReaderActions = {
   setExpanded: (draft: ReaderState, key: string, value: boolean) => void;
@@ -39,6 +44,7 @@ type ReaderActions = {
   setFoldIntensity: (draft: ReaderState, value: FoldIntensity) => void;
   setFrostedGlass: (draft: ReaderState, value: boolean) => void;
   setKeepProse: (draft: ReaderState, value: boolean) => void;
+  setKeepToolSemantics: (draft: ReaderState, value: boolean) => void;
 };
 
 function applyFoldIntensity(draft: ReaderState, value: FoldIntensity): void {
@@ -57,6 +63,7 @@ export function createReaderStore(): EngineStoreHandle<ReaderState, ReaderAction
       foldIntensity: FOLD_INTENSITY_DEFAULT,
       frostedGlass: false,
       keepProse: keepProseOf(undefined),
+      keepToolSemantics: false,
       processOnly: false,
     }),
     persist: 'dsh.reader.v1',
@@ -72,6 +79,7 @@ export function createReaderStore(): EngineStoreHandle<ReaderState, ReaderAction
       setFoldIntensity: (draft, value: FoldIntensity) => { applyFoldIntensity(draft, value); },
       setFrostedGlass: (draft, value: boolean) => { draft.frostedGlass = value; },
       setKeepProse: (draft, value: boolean) => { draft.keepProse = value; },
+      setKeepToolSemantics: (draft, value: boolean) => { draft.keepToolSemantics = value; },
     },
   });
 }

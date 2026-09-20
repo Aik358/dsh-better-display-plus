@@ -55,6 +55,8 @@
   opacity: 0.85;
 }
 
+/* Modifier only: the element carries .switch too, which owns size, radius, the
+   knob and the cursor. A bare class here rendered an unstyled, zero-size button. */
 .switchQuiet {
   transform: scale(0.85);
   transform-origin: right center;

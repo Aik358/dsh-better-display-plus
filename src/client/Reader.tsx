@@ -9,7 +9,7 @@ import { ToolActivity, ToolMedia } from './ToolActivity.js';
 import { preparingLabel, readerFlow } from './tool-activity.js';
 import { Disclosure, ProcessFragment, RetiringContent, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
 import { StreamMotionContext } from './streaming.js';
-import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
+import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel, toggleProcessOpen } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
 import { asReadonlyArray, pendingSubmissionImages, type PendingSubmissionEcho } from './pending-submission.js';
@@ -19,9 +19,9 @@ import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
-import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
+import { presentLiveTurn, segmentLiveTurn, settledFoldItems } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
-import { foldIntensityOf, frostedGlassOf, keepProseOf, type FoldIntensity } from './fold-intensity.js';
+import { foldIntensityOf, frostedGlassOf, keepProseOf, keepToolSemanticsOf, type FoldIntensity } from './fold-intensity.js';
 import { ChoreographedFlow, useFlowChat } from './ChoreographedFlow.js';
 import { ClosedProcessSummary } from './ClosedProcessSummary.js';
 import { StickyLane } from './StickyLane.js';
@@ -29,9 +29,26 @@ import type { ReaderGroup, TurnBoundary } from './projection.js';
 import type { BlockRenderProps, ReaderProps } from './types.js';
 import css from './Reader.module.css';
 import { markdownLabels, truncatedJsonLabel } from './primitive-labels.js';
+import { translateOf } from './translate.js';
 
 function isNode<K extends ChatNodeKind>(node: ChatConversationViewNode, kind: K): node is ChatNode<K> {
   return node.kind === kind;
+}
+
+/**
+ * Pending user interaction (an approval or a question), read off the Session
+ * snapshot.
+ *
+ * 0.1.6 removed the dedicated \`useSessionPendingInteraction\` standard prop and
+ * moved the value onto \`SessionSnapshot.pendingInteraction\`. The bundled type
+ * packages still describe the older host, so this reads the field structurally
+ * and stays correct on both: an absent field simply reads as "nothing pending",
+ * which is the same thing the removed hook returned for an idle session.
+ */
+type PendingInteractionLike = { kind?: string };
+function pendingInteractionOf(snapshot: unknown): PendingInteractionLike | undefined {
+  const value = (snapshot as { pendingInteraction?: unknown } | undefined)?.pendingInteraction;
+  return typeof value === 'object' && value !== null ? (value as PendingInteractionLike) : undefined;
 }
 
 function cleanErrorMessage(raw: string | undefined): string {
@@ -119,7 +136,12 @@ const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motio
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   if (!node || node.visibility === 'hidden') return null;
   let content: ReactNode = null;
-  if (isNode(node, 'context')) content = <ContextInjectionRow {...node.data} t={t} />;
+  // The context row is the one place the reader hands the host translator to a
+  // child. A host that delivers no locale seat (0.1.6 moved how that seat
+  // arrives) used to crash here, and React unmounted the whole boundary — the
+  // reader showed "此内容暂时无法在阅读页显示" over a record it could have drawn.
+  // Resolve it once, at the boundary, so a missing seat degrades to local copy.
+  if (isNode(node, 'context')) content = <ContextInjectionRow {...node.data} t={translateOf(t)} />;
   else if (isNode(node, 'system-prompt')) content = <details className={css.detail}><summary>系统提示词</summary><pre className={css.systemPrompt}>{node.data.text}</pre></details>;
   else if (isNode(node, 'model-retry')) content = <JsonBlock label="模型重试记录" payload={node.data.attempts} truncatedLabel={truncatedJsonLabel} />;
   else if (isNode(node, 'manual-compaction')) {
@@ -151,8 +173,11 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   const data = node.data;
   const parts = assistantSegments(data.blocks);
   const earlier = isEarlierNarration(data, boundary);
-  const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
-  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
+  // \`hasToolCalls\` is deliberately absent: it is a whole-step fact, and a step
+  // that both talks and calls a tool would then push its *prose* into the fold
+  // — the reader saw a finished turn as nothing but tool rows. Whether a part
+  // is process is already decided per part by \`assistantSegments\`.
+  const isProcessStep = earlier || folded || (boundary.latestStep > 0 && data.step < boundary.latestStep);
   const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
   const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
   return <>{visible.map(part => {
@@ -165,12 +190,17 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
           holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </ReasoningCard>
     </ProcessFragment>
-    : isProcessStep ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
+    // A part that carries prose for the reader is routed to the answer branch
+    // even when the step it sits in reads as process. "Earlier narration" used
+    // to be dropped into the collapsed commentary fragment, which is why a
+    // finished turn could read as nothing but tool rows: the words addressed to
+    // the user were inside the shut disclosure.
+    : isProcessStep && !hasVisibleBody(part.blocks) ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
       <article className={css.processCommentary}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </article>
     </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
+    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || !folded}>
       <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
         {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
@@ -269,8 +299,10 @@ function subagentCount(snapshot: { nodes: { get(key: string): ChatConversationVi
   return 0;
 }
 
-function GroupStatus({ group, sessionId, useChat, useSessionPendingInteraction, motion }: Pick<ReaderProps, 'sessionId' | 'useChat' | 'useSessionPendingInteraction'> & { group: ReaderGroup; motion: boolean }) {
-  const pending = useSessionPendingInteraction(snapshot => snapshot.get(sessionId));
+function GroupStatus({ group, useChat, useSession, motion }: Pick<ReaderProps, 'useChat' | 'useSession'> & { group: ReaderGroup; motion: boolean }) {
+  // 0.1.6 dropped the dedicated `useSessionPendingInteraction` standard prop; the
+  // pending interaction now rides the Session snapshot itself.
+  const pending = useSession(pendingInteractionOf);
   const text = useChat(snapshot => {
     const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
     if (turn?.status === 'closed') {
@@ -470,11 +502,11 @@ function DeliverablesRow({ deliverables, openFile, revealFile, openMode }: {
   );
 }
 
-const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, foldLevel, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; autoFold: boolean; keepProse: boolean; foldLevel: FoldIntensity; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
+const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, keepToolSemantics, foldLevel, pinnedKeys, selectedProcessKeys, isAwaitingModel = false, ...props }: ReaderProps & { group: ReaderGroup; motion: boolean; autoFold: boolean; keepProse: boolean; keepToolSemantics: boolean; foldLevel: FoldIntensity; pinnedKeys: readonly string[]; selectedProcessKeys: readonly string[]; isAwaitingModel?: boolean }) {
   const snapshot = props.useChat(snapshot => snapshot);
   const nodes = snapshot.nodes;
   const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
-  const interaction = props.useSessionPendingInteraction(snapshot => snapshot.get(props.sessionId));
+  const interaction = props.useSession(pendingInteractionOf);
   const sessionRunning = props.useSession(snapshot => snapshot.running);
   const boundary = useMemo(() => boundaryOf(turn), [turn]);
   const choiceKey = processChoiceKey(group.key, boundary);
@@ -491,7 +523,16 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, 
   // Level 2 ("summary") means "fold the process, never the prose"; the separate
   // switch extends that same guarantee to levels 0 and 1.
   const keepBody = keepProse || foldLevel === 2;
-  const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold, keepBody), [steps, boundary, autoFold, keepBody]);
+  const liveItems = useMemo(
+    () => presentLiveTurn(steps, boundary, autoFold, keepBody, keepToolSemantics),
+    [steps, boundary, autoFold, keepBody, keepToolSemantics],
+  );
+  // A finished turn used to fall back to one whole-turn disclosure, so the fold
+  // switches silently stopped applying the moment a turn completed.
+  const settled = useMemo(
+    () => settledFoldItems(steps, boundary, autoFold && keepBody, keepToolSemantics),
+    [steps, boundary, autoFold, keepBody, keepToolSemantics],
+  );
   const openMode = deliverableOpenModeOf(useSyncExternalStore(
     props.openPrefs?.subscribe ?? ((fn: () => void) => { void fn; return () => {}; }),
     () => props.openPrefs?.getSnapshot()?.deliverableOpenMode,
@@ -534,9 +575,9 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, 
     const captured = new Map(group.keys.flatMap(key => {
       const node = nodes.get(key); return node ? [[key, node] as const] : [];
     }));
-    return { items: holdingSelection ? presentLiveTurn(steps, boundary, false) : liveItems,
+    return { items: settled ?? (holdingSelection ? presentLiveTurn(steps, boundary, false) : liveItems),
       snapshot: { ...snapshot, nodes: { ...nodes, get: (key: string) => captured.get(key), values: () => [...captured.values()] } } };
-  }, [snapshot, nodes, group, steps, boundary, liveItems, holdingSelection]);
+  }, [snapshot, nodes, group, steps, boundary, liveItems, settled, holdingSelection]);
   const shared = {
     useChat: useFlowChat,
     renderSlotChain: props.renderSlotChain,
@@ -549,6 +590,9 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, 
     fileMentions,
     metrics,
     getToolView: props.getToolView,
+    // Tool rows render their own labels through `t`; without it the reader hit
+    // "t is not a function" whenever a tool card expanded.
+    t: props.t,
   };
   const terminal = terminalLabel(boundary.reason);
   const hasTurnError = flow.some(item => item.kind === 'node' && nodes.get(item.nodeKey)?.kind === 'turn-error');
@@ -578,9 +622,9 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, 
     {startsWithUser && <BlockBoundary><MainNode {...shared} useChat={props.useChat} boundary={boundary} nodeKey={group.keys[0]} /></BlockBoundary>}
     {hasProcess && !isAwaitingModel && <StickyLane kind="status" className={css.turnProcessSticky}>
       <Disclosure open={expanded} onChange={setExpanded} controls={flowId} buttonRef={processButton}
-        label={<GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />} />
+        label={<GroupStatus group={group} useChat={props.useChat} useSession={props.useSession} motion={motion} />} />
     </StickyLane>}
-    {boundary.status === 'closed' && hasProcess && autoFold && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
+    {boundary.status === 'closed' && hasProcess && autoFold && !settled && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
       steps={steps.filter(step => {
         if (step.kind === 'user') return false;
         if (step.kind !== 'body') return true;
@@ -589,12 +633,13 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, 
           || node.data.blocks.some(block => block.kind === 'tool-call')
           || (boundary.latestStep > 0 && node.data.step < boundary.latestStep));
       })} />}
-    <ChoreographedFlow id={flowId} frame={presentation} motion={motion} enabled={autoFold && boundary.status === 'open' && !holdingSelection}
-      urgent={hasTurnError || interaction !== undefined || !sessionRunning} open={foldOpenByKey} processOpen={expanded}
-      onOpenChange={(key, value) => { pinProcess(); setFoldOpenByKey(current => ({ ...current, [key]: value })); }} renderStep={renderStep} />
+    <ChoreographedFlow id={flowId} frame={presentation} motion={motion} enabled={autoFold && (boundary.status === 'open' || !!settled) && !holdingSelection}
+      urgent={hasTurnError || interaction !== undefined || !sessionRunning} open={foldOpenByKey}
+      processOpen={expanded}
+      onOpenChange={(key, value) => { setFoldOpenByKey(current => ({ ...current, [key]: value })); }} renderStep={renderStep} />
     {/* 状态指示永远排在流程之后：AI 的响应永远出现在最新消息（含补充消息）的下方 */}
     {!hasProcess && boundary.status === 'open' && !isAwaitingModel && <div className={css.disclosure} data-reader-status-only>
-      <GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} useSessionPendingInteraction={props.useSessionPendingInteraction} motion={motion} />
+      <GroupStatus group={group} useChat={props.useChat} useSession={props.useSession} motion={motion} />
     </div>}
     {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} openMode={openMode} />}
     {showTerminalNotice && <div className={css.notice} data-reader-terminal>{terminal}</div>}
@@ -608,7 +653,7 @@ export function Reader(props: ReaderProps) {
   const nodes = props.useChat(snapshot => snapshot.nodes);
   const timeline = props.useChat(snapshot => snapshot.timeline);
   const running = props.useSession(snapshot => snapshot.running);
-  const pending = props.useSessionPendingInteraction(snapshot => snapshot.get(props.sessionId));
+  const pending = props.useSession(pendingInteractionOf);
   const openError = props.useSession(snapshot => snapshot.openError);
   const loading = props.useSession(snapshot => snapshot.openState === 'loading');
   const hasMore = props.useSession(snapshot => snapshot.hasMore);
@@ -629,7 +674,9 @@ export function Reader(props: ReaderProps) {
   // Orthogonal to autoFold: the slider decides how much process to fold, this
   // decides whether the model's user-facing text is foldable at all.
   const keepProse = keepProseOf(prefsSnap);
+  const keepToolSemantics = keepToolSemanticsOf(prefsSnap);
   const foldLevel = foldIntensityOf(prefsSnap);
+  void keepToolSemantics;
   const streamMotion = useMemo(() => ({ enabled: motion, activatedAt: activatedAt.current }), [motion]);
   const groups = useMemo(() => groupNodes(order, key => nodes.get(key)), [order, nodes, timeline]);
   const isAwaitingModel = useMemo(() => {
@@ -819,7 +866,7 @@ export function Reader(props: ReaderProps) {
       {historyError && <div className={css.notice}>历史记录加载失败，可再次尝试；现有内容未改变。</div>}
       {openError && <div className={css.error} role="alert">会话暂时无法读取：{openError.message}</div>}
       {loading && groups.length === 0 && <p className={css.empty} role="status">正在读取会话…</p>}
-      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} keepProse={keepProse} foldLevel={foldLevel} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
+      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} keepProse={keepProse} keepToolSemantics={keepToolSemantics} foldLevel={foldLevel} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
       {visibleSubmissions.map(submission => {
         const images = pendingSubmissionImages(submission);
         return (
@@ -844,7 +891,7 @@ export function Reader(props: ReaderProps) {
         </div>
         );
       })}
-      {isAwaitingModel && <WaitingStatus anchor={waitAnchor} label={props.t ? props.t('chat.deepDiving') : '深度求索中...'} />}
+      {isAwaitingModel && <WaitingStatus anchor={waitAnchor} label={translateOf(props.t)('chat.deepDiving')} />}
       {pending !== undefined && <div className={css.attention} role="alert" data-reader-attention>
         <strong>{pending.kind === 'question' ? '需要你回答一个问题' : '需要你的确认'}</strong>
         <span>请在下方原生操作区处理。此提示不会收进执行过程。</span>
