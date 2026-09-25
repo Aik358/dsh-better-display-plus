@@ -49,7 +49,7 @@ test('commits compiled lib entries and does not require a prepare script', () =>
 test('README leads with the official stock one-liner and names pnpm', () => {
   for (const name of ['README.md', 'README.en.md']) {
     const text = readFileSync(resolve(root, name), 'utf8');
-    assert.match(text, /dsh plugin --profile web add github:aa2246740\/dsh-better-display/);
+    assert.match(text, /dsh plugin --profile web add github:Aik358\/dsh-better-display-plus/);
     assert.match(text, /pnpm/);
     assert.doesNotMatch(text, /activate-new-client/);
     assert.doesNotMatch(text, /my-plugins/);

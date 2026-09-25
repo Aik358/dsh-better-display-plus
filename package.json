@@ -1,5 +1,5 @@
 {
-  "name": "dsh-better-display",
+  "name": "@aik358/dsh-better-display",
   "version": "0.2.1",
   "description": "A calmer reading view for DeepSeek Harness: native process details, live reasoning, and clean final answers.",
   "type": "module",
@@ -102,11 +102,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aa2246740/dsh-better-display.git"
+    "url": "git+https://github.com/Aik358/dsh-better-display-plus.git"
   },
-  "homepage": "https://github.com/aa2246740/dsh-better-display#readme",
+  "homepage": "https://github.com/Aik358/dsh-better-display-plus#readme",
   "bugs": {
-    "url": "https://github.com/aa2246740/dsh-better-display/issues"
+    "url": "https://github.com/Aik358/dsh-better-display-plus/issues"
   },
   "keywords": [
     "deepseek-harness",

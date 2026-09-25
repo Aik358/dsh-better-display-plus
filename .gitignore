@@ -11,3 +11,4 @@ artifacts/
 
 # local-only: unpacked host packages for the dual-contract probe
 _local-dev/
+tsconfig.probe017.json
