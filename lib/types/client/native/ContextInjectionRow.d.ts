@@ -1,5 +1,18 @@
 import type { ContextMessageNode } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
+/**
+ * The role/name projection this row reads, declared structurally on purpose.
+ *
+ * The host generation that projects it renamed the field between releases —
+ * 0.1.6 nodes carry `provenance: ContextProvenanceView`, 0.1.7 nodes carry
+ * `producer: ContextProducerView` — and the node types installed in this
+ * checkout describe only the older one. Reading the shape the row needs keeps
+ * one component rendering on either generation.
+ */
+interface ProducerView {
+    role: 'inject' | 'recall';
+    label: string | null;
+}
 /** Props for the logged non-user message presentation. */
 export interface ContextInjectionRowProps {
     content: ContextMessageNode['content'];
@@ -7,14 +20,14 @@ export interface ContextInjectionRowProps {
     /**
      * Role and producer name projected from the durable source.
      *
-     * Host generations disagree on the field name: newer builds project
-     * `provenance`, the 0.1.6-alpha generations project `producer`. Both are
-     * optional here and resolved below, so the row renders on either host instead
-     * of throwing on `undefined.role` and degrading its whole block boundary.
+     * Host generations disagree on the field name: the 0.1.7 line projects
+     * `producer`, the earlier line projected `provenance`. Both are optional here
+     * and resolved below, so the row renders on either host instead of throwing on
+     * `undefined.role` and degrading its whole block boundary.
      */
-    provenance?: ContextMessageNode['provenance'] | null;
-    /** Alpha-generation spelling of {@link provenance}. */
-    producer?: ContextMessageNode['provenance'] | null;
+    producer?: ProducerView | null;
+    /** Alpha-generation spelling of {@link producer}. */
+    provenance?: ProducerView | null;
     /** Producer-declared information form; null renders the opaque body. */
     form: ContextMessageNode['form'];
     /** The owning view's locale seat, passed down as a plain prop. */
@@ -32,4 +45,5 @@ export interface ContextInjectionRowProps {
  * @returns A collapsed context row with a bounded, form-specific body.
  */
 export declare function ContextInjectionRow({ content, source, provenance, producer, form, t }: ContextInjectionRowProps): import("react").JSX.Element;
+export {};
 //# sourceMappingURL=ContextInjectionRow.d.ts.map

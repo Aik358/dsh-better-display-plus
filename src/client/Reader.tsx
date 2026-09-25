@@ -36,6 +36,18 @@ function isNode<K extends ChatNodeKind>(node: ChatConversationViewNode, kind: K)
 }
 
 /**
+ * Provider-call timing as the 0.1.7 line records it per assistant message.
+ *
+ * Declared locally because the chat types installed in this checkout expose the
+ * older turn-tail counters instead, and the two exist on different hosts.
+ */
+interface TimingView {
+  stepStartTime?: number | null;
+  firstTokenTime?: number | null;
+  completedTime?: number;
+}
+
+/**
  * Pending user interaction (an approval or a question), read off the Session
  * snapshot.
  *
@@ -561,13 +573,50 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, keepProse, 
     return undefined;
   }, [group.keys, nodes]);
   const runMs = turn?.start && turn?.end ? Math.max(0, turn.end.time - turn.start.time) : undefined;
+  // First-token latency and stream rate: the 0.1.7 line stopped projecting them
+  // onto turn-tail and publishes per-assistant `timing` instead, so the latency
+  // comes from whichever seat this host fills and the rate is estimated from the
+  // step's own output. Absent on both = no readout, never a stale figure.
+  const liveRates = useMemo(() => {
+    const rates = tailData as { ttftMs?: unknown; tokensPerSecond?: unknown } | undefined;
+    const ttft = typeof rates?.ttftMs === 'number' ? rates.ttftMs : undefined;
+    const rate = typeof rates?.tokensPerSecond === 'number' ? rates.tokensPerSecond : undefined;
+    if (ttft !== undefined || rate !== undefined) return { ttftMs: ttft, tokensPerSecond: rate };
+    let first: number | undefined;
+    let last: number | undefined;
+    let outputChars = 0;
+    for (const step of turn?.steps ?? []) {
+      const data = step.data.get('assistant-step') as unknown as
+        | { timing?: TimingView; blocks?: readonly { kind?: string; text?: string }[] }
+        | undefined;
+      const timing = data?.timing;
+      if (!timing) continue;
+      if (first === undefined && timing.stepStartTime != null && timing.firstTokenTime != null) {
+        first = Math.max(0, timing.firstTokenTime - timing.stepStartTime);
+      }
+      if (typeof timing.completedTime === 'number') last = Math.max(last ?? timing.completedTime, timing.completedTime);
+      // The rate below is an ESTIMATE: the host keeps no per-step token count here,
+      // so characters are converted at the usual ~4 characters per token and the
+      // readout states the estimate rather than implying provider accounting.
+      for (const block of data?.blocks ?? []) {
+        if (block.kind === 'text' || block.kind === 'reasoning') outputChars += (block.text ?? '').length;
+      }
+    }
+    const spanMs = last !== undefined && turn?.start ? last - turn.start.time : undefined;
+    const hasWindow = first !== undefined || (spanMs !== undefined && spanMs > 0);
+    if (!hasWindow) return { ttftMs: undefined, tokensPerSecond: undefined };
+    return {
+      ttftMs: first,
+      tokensPerSecond: spanMs !== undefined && spanMs > 0 && outputChars > 0 ? (outputChars / 4) / (spanMs / 1000) : undefined,
+    };
+  }, [tailData, turn?.steps, turn?.start?.time]);
   const metrics = useMemo(() => ({
     usage: tailData?.tokenUsage,
     runMs,
-    tokensPerSecond: tailData?.tokensPerSecond,
-    ttftMs: tailData?.ttftMs,
+    tokensPerSecond: liveRates.tokensPerSecond,
+    ttftMs: liveRates.ttftMs,
     endedAt: tailData?.closing?.time ?? turn?.end?.time,
-  }), [tailData, runMs, turn?.end?.time]);
+  }), [tailData, runMs, liveRates, turn?.end?.time]);
   const forkSeq = forkAnchorSeq([tailData?.closing?.finalNode]);
   const presentation = useMemo(() => {
     // ChatNodeStore exposes live keyed readers. Materialize this turn instead of

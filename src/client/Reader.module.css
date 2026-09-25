@@ -99,7 +99,10 @@
 .processMetaLine .meta { color: inherit; }
 .chevron { flex: none; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; transition: transform 260ms cubic-bezier(.22,1,.36,1); }
 .chevron[data-open=true] { transform: rotate(90deg); }
-.disclosureBody { overflow: hidden; height: 0; transform-origin: top center; will-change: height, opacity, transform; }
+/* An expanded body is a surface, not a hole: without an opaque fill the growing
+   box lets whatever sits behind it (a sticky lane, the answer below) show through,
+   so the two read as one stacked, unreadable block. */
+.disclosureBody { overflow: hidden; height: 0; transform-origin: top center; will-change: height, opacity, transform; background: var(--dsw-alias-bg-base); }
 /* One rail geometry for every nested lane. These three rules used to sit at
    6px / 24px / 6px with 1px, 1px and 2px rails, so the vertical guides stepped
    in and out down the page. They now share --reader-rail: same left edge, same
@@ -293,7 +296,7 @@
 .toolState[data-phase=interrupted] { color: inherit; opacity: .7; }
 .toolLedger { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 10px 14px 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 18px; font-variant-numeric: tabular-nums; }
 .toolEngine { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.toolDetails { margin: 6px 0 0 22px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; min-width: 0; overflow: hidden; }
+.toolDetails { margin: 6px 0 0 22px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; min-width: 0; overflow: hidden; background: var(--dsw-alias-bg-module-platform); }
 .toolTabs { display: flex; align-items: center; gap: 15px; padding: 0 14px; }
 .toolTabs > button { background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 10px 1px 8px; font: inherit; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .toolTabs > button[aria-selected=true] { color: var(--dsw-alias-label-primary); border-bottom-color: var(--dsw-alias-state-business-primary); }
@@ -342,6 +345,12 @@
   scrollbar-color: var(--dsw-alias-border-l1) transparent;
 }
 .reasonCard[data-expanded=true] .reasonViewport { max-height: min(60vh, 560px, var(--reason-reading-height, 560px)); }
+/* The viewport's max-height is the only thing that grows when the card opens, and
+   it had no transition: the box jumped 224px -> up to 560px in one frame, so the
+   rows below appeared to be covered rather than pushed. Animating the height makes
+   the push visible and gives the layout a chance to follow. */
+.reasonViewport { transition: max-height 320ms var(--reason-ease), opacity 200ms var(--reason-ease); }
+.reasonCard[data-expanded=true] { background: var(--dsw-alias-bg-module-platform); border-color: var(--dsw-alias-border-l2); border-radius: 12px; }
 .reasonViewport[data-edges=both], .reasonCard[data-following=true][data-overflow=true] .reasonViewport {
   -webkit-mask-image: linear-gradient(transparent 0, black var(--reason-fade), black calc(100% - var(--reason-fade)), transparent 100%);
   mask-image: linear-gradient(transparent 0, black var(--reason-fade), black calc(100% - var(--reason-fade)), transparent 100%);
@@ -493,7 +502,7 @@
 .numberRollEnter { animation: numberRollIn 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes numberRollOut { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100%); opacity: 0; } }
 @keyframes numberRollIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-[data-motion=off] .chevron, [data-motion=off] .imageOpen img, [data-motion=off] .processMeta, [data-motion=off] .numberRollDigit { transition: none !important; animation: none !important; }
+[data-motion=off] .chevron, [data-motion=off] .imageOpen img, [data-motion=off] .processMeta, [data-motion=off] .numberRollDigit, [data-motion=off] .reasonViewport { transition: none !important; animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .chevron, .imageOpen img, .processMeta, .numberRollDigit { transition: none !important; animation: none !important; } }
 .turnStatus { align-self: flex-start; flex: none; display: inline-flex; align-items: center; height: 26px; font-size: 14px; line-height: 22px; white-space: nowrap; margin: 4px 0 12px; padding: 0 4px; }
 .turnStatusLabel { font-weight: 500; background: linear-gradient(90deg, var(--dsw-static-deepseek-500, #4d6bfe) 0%, var(--dsw-static-deepseek-500, #4d6bfe) 40%, var(--dsw-static-deepseek-200, #a8c7fa) 50%, var(--dsw-static-deepseek-500, #4d6bfe) 60%, var(--dsw-static-deepseek-500, #4d6bfe) 100%); background-position: 100% 0; background-size: 250% 100%; background-clip: text; color: transparent; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: dsh-turn-status-shimmer 1.8s linear infinite; }

@@ -1,0 +1,63 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2024",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node",
+      "react"
+    ],
+    "paths": {
+      "@deepseek-ai/dsh-client-ui-primitives": [
+        "./_local-dev/_host017/dsh-client-ui-primitives/package/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-primitives/*": [
+        "./_local-dev/_host017/dsh-client-ui-primitives/package/lib/types/*"
+      ],
+      "@deepseek-ai/dsh-client-ui-conversation/client": [
+        "./_local-dev/_host017/dsh-client-ui-conversation/package/lib/types/client/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-conversation": [
+        "./_local-dev/_host017/dsh-client-ui-conversation/package/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-chat/client": [
+        "./_local-dev/_host017/dsh-client-ui-chat/package/lib/types/client/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-chat": [
+        "./_local-dev/_host017/dsh-client-ui-chat/package/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-slots": [
+        "./_local-dev/_host017/dsh-client-ui-slots/package/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-store": [
+        "./_local-dev/_host017/dsh-client-store/package/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-renderer/client": [
+        "./_local-dev/_host017/dsh-client-ui-renderer/package/lib/types/client/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-ui-session/client": [
+        "./_local-dev/_host017/dsh-client-ui-session/package/lib/types/client/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-session-turn-outline": [
+        "./_local-dev/_host017/dsh-session-turn-outline/package/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-util-workspace-path": [
+        "./_local-dev/_host017/dsh-util-workspace-path/package/lib/types/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

@@ -8,3 +8,6 @@ artifacts/
 *.log
 *.tgz
 .DS_Store
+
+# local-only: unpacked host packages for the dual-contract probe
+_local-dev/
